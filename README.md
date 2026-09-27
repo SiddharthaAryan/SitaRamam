@@ -24,5 +24,5 @@ The app deliberately has no Firebase project ID embedded in the repository. The 
 
 - Enable Firebase App Check with a reCAPTCHA Enterprise key and enforce it on Firestore/Auth after testing. Anonymous sign-in plus a public QR alone does **not** prevent spam orders. Monitor quota usage.
 - Verify the order number, owner role, price validation, duplicate retry, payment isolation, and simultaneous orders in the Emulator Suite.
-- The dashboard currently loads all orders and all payments; add dated queries, paging and CSV export before relying on it as a long-term accounting system. It shows totals only for loaded orders, not a complete daily report. Reconcile cash/UPI receipts outside the app until payment methods and reporting are implemented.
+- The owner can filter orders by IST date, see all unpaid orders, and export a selected day as CSV. The dashboard still subscribes to all orders and all payments; add server-side dated queries and paging as history grows. The brother records cash or UPI manually. Reconcile those marks against actual receipts before relying on the CSV as a formal ledger.
 - Hosting build-time `VITE_` variables must be present during `npm run build`. GitHub publishing/deployment workflow is intentionally absent until the dedicated Firebase project and its credentials exist.
