@@ -26,7 +26,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&am
 const route = () => location.pathname.startsWith('/staff') ? 'staff' : 'customer';
 const errorText = e => ({'permission-denied':'Access denied. Check your staff role and database rules.','unauthenticated':'Please sign in again.','unavailable':'Connection lost. Check your internet and retry.','resource-exhausted':'Service limit reached. Please order at the counter.'}[e.code] || e.message || 'Something went wrong.');
 function shell(body, staff=false) { root.innerHTML = `<header><a class="brand" href="/">✦ Rassense <span>Night Mess</span></a>${staff ? '<a href="/">Customer view ↗</a>' : '<a href="/staff">Staff sign in</a>'}</header><main>${body}</main><footer>Made for late night cravings · IIM Jammu</footer>`; }
-function notice(message, kind='info') { state.status = message; const target = document.querySelector('#notice'); if (target) { target.className = `notice ${kind}`; target.textContent = message; } }
+function notice(message, kind='info') { state.status = message; const target = document.querySelector('#notice'); if (target) { target.hidden = false; target.className = `notice ${kind}`; target.textContent = message; } }
 function clean() { state.unsubscribe.forEach(unsub => unsub()); state.unsubscribe = []; }
 function itemRow(item) { const qty = state.cart[item.id] || 0; return `<article class="item"><div><div class="item-title">${esc(item.name)} ${item.available === false ? '<small>Sold out</small>' : ''}</div><p>${esc(item.description || '')}</p><strong>${money(item.price)}</strong></div>${item.available === false ? '' : `<div class="stepper"><button data-item="${esc(item.id)}" data-delta="-1" aria-label="Remove ${esc(item.name)}">−</button><b>${qty}</b><button data-item="${esc(item.id)}" data-delta="1" aria-label="Add ${esc(item.name)}">+</button></div>`}</article>`; }
 function selectedItems() { return state.menu.filter(x => state.cart[x.id] > 0 && x.available !== false).map(x => ({ id:x.id, name:x.name, price:x.price, qty:state.cart[x.id] })); }
@@ -67,7 +67,7 @@ function confirmation(id,name,total) {
 }
 async function login() {
   shell(`<section class="narrow"><div class="eyebrow">STAFF ACCESS</div><h1>Welcome back.</h1><p>Sign in to see tonight’s orders.</p><form id="login" class="panel"><label>Email</label><input name="email" type="email" required autocomplete="username"/><label>Password</label><input name="password" type="password" required autocomplete="current-password"/><button class="primary">Sign in →</button></form><div id="notice" class="notice" hidden></div></section>`,true);
-  root.querySelector('#login').onsubmit=async event=>{event.preventDefault(); const button=event.target.querySelector('button');button.disabled=true;try{await setPersistence(auth,browserLocalPersistence); const {user}=await signInWithEmailAndPassword(auth,event.target.email.value,event.target.password.value);state.user=user;await staff();}catch(e){button.disabled=false;notice(errorText(e),'error');}};
+  root.querySelector('#login').onsubmit=async event=>{event.preventDefault(); const button=event.target.querySelector('button');button.disabled=true;try{await setPersistence(auth,browserLocalPersistence); const {user}=await signInWithEmailAndPassword(auth,event.target.elements.namedItem('email').value,event.target.elements.namedItem('password').value);state.user=user;await staff();}catch(e){button.disabled=false;notice(errorText(e),'error');}};
 }
 async function staff() {
   clean(); const user=auth.currentUser;
