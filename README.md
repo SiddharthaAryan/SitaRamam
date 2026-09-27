@@ -1,1 +1,28 @@
-# SitaRamam
+# SitaRamam Night Mess
+
+The repository is named SitaRamam; the customer-facing name follows the supplied Rassense Pvt Ltd printed night menu. QR ordering for students, a live kitchen queue, and an owner-only payment ledger. Uses GitHub Pages, Firebase Authentication (anonymous customers and email/password staff), and Cloud Firestore on a dedicated project.
+
+## Setup
+
+1. Create a **new Firebase project**, separate from any hospital project. Enable Firestore in production mode and Authentication providers **Anonymous** and **Email/Password**.
+2. Copy `.env.example` to `.env` and fill in the **new project's** web app settings. This config identifies the Firebase app, not an admin secret. Never add a service-account key to the repo.
+3. `npm install && npm run dev`. The student page is `/`; the staff page is `/staff`.
+4. Install Firebase CLI (`npm install -g firebase-tools`), then `firebase login` and `firebase use --add`. Select only the dedicated night-mess project. Deploy rules with `firebase deploy --only firestore:rules --project YOUR_NIGHT_MESS_PROJECT_ID`.
+5. In Firebase Authentication, create your brother's email/password account and a separate kitchen account. Put their login emails in `VITE_OWNER_LOGIN_EMAIL` and `VITE_KITCHEN_LOGIN_EMAIL` before building. The staff page asks for station and password only; the matching email account is selected behind the scenes. Copy each account UID. In Firestore console create `staff/{UID}` with field `role` set to `owner` for your brother and `kitchen` for chefs. The app cannot create or alter these role documents.
+6. GitHub Actions publishes every push to `main` to `https://siddharthaaryan.github.io/SitaRamam/`. Enable GitHub Pages with **GitHub Actions** as its source in repository Settings → Pages if needed. The owner signs in at `/SitaRamam/staff` and uses **Load the 12 items from the printed menu**, then checks prices and availability. The menu shows 11:00 PM–3:00 AM and the printed estimate of 10–15 minutes; hours are informational and do not automatically disable ordering. Test one customer order and both staff accounts before displaying the QR. Firebase Hosting is separately configured but has no release; this workflow uses GitHub Pages.
+
+The app deliberately has no Firebase project ID embedded in the repository. The actual project configuration must be supplied as environment variables. Do not connect this repository to the Family E-Card or HR portal project.
+
+## Workflow
+
+- Customer enters a name and selects 1–8 distinct menu items, up to 20 of each. Reviewing then placing creates an order with a six-character random order number; Firestore rejects collisions. The browser retains a pending number during retries to avoid duplicate orders when the connection drops.
+- Kitchen moves the order New → Preparing → Ready → Given. Given time is stored server-side; the UI shows elapsed minutes.
+- Payment is a separate owner-only document. An order with no payment document is unpaid, including when already given. Kitchen cannot read payment documents. The owner can mark paid and undo an incorrect payment mark.
+- Print slip opens the browser print dialogue on the staff device. An unattended thermal print service is not included in this version.
+
+## Before public launch
+
+- Enable Firebase App Check with a reCAPTCHA Enterprise key and enforce it on Firestore/Auth after testing. Anonymous sign-in plus a public QR alone does **not** prevent spam orders. Monitor quota usage.
+- Verify the order number, owner role, price validation, duplicate retry, payment isolation, and simultaneous orders in the Emulator Suite.
+- The owner can filter orders by IST date, see all unpaid orders, and export a selected day as CSV. The dashboard still subscribes to all orders and all payments; add server-side dated queries and paging as history grows. The brother records cash or UPI manually. Reconcile those marks against actual receipts before relying on the CSV as a formal ledger.
+- The GitHub Pages workflow includes Firebase web configuration and the two station email addresses. Firebase web configuration is public by design; passwords and service-account keys are never added to the repository. Restrict the Firebase API key to the project's required APIs if appropriate, and keep Firestore rules deployed.
