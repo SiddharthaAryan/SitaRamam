@@ -1,0 +1,91 @@
+import './style.css';
+import { auth, authReady, configured, db } from './firebase.js';
+import { browserLocalPersistence, onAuthStateChanged, setPersistence, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { collection, deleteDoc, doc, getDoc, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+
+const root = document.querySelector('#app');
+const state = { menu: [], cart: {}, user: null, role: null, orders: [], payments: new Map(), status: '', unsubscribe: [], selected: null };
+const money = n => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+const time = value => value?.toDate ? value.toDate().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : 'Just now';
+const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
+const route = () => location.pathname.startsWith('/staff') ? 'staff' : 'customer';
+const errorText = e => ({'permission-denied':'Access denied. Check your staff role and database rules.','unauthenticated':'Please sign in again.','unavailable':'Connection lost. Check your internet and retry.','resource-exhausted':'Service limit reached. Please order at the counter.'}[e.code] || e.message || 'Something went wrong.');
+function shell(body, staff=false) { root.innerHTML = `<header><a class="brand" href="/">✦ SitaRamam <span>Night Mess</span></a>${staff ? '<a href="/">Customer view ↗</a>' : '<a href="/staff">Staff sign in</a>'}</header><main>${body}</main><footer>Made for late night cravings · IIM Jammu</footer>`; }
+function notice(message, kind='info') { state.status = message; const target = document.querySelector('#notice'); if (target) { target.className = `notice ${kind}`; target.textContent = message; } }
+function clean() { state.unsubscribe.forEach(unsub => unsub()); state.unsubscribe = []; }
+function itemRow(item) { const qty = state.cart[item.id] || 0; return `<article class="item"><div><div class="item-title">${esc(item.name)} ${item.available === false ? '<small>Sold out</small>' : ''}</div><p>${esc(item.description || '')}</p><strong>${money(item.price)}</strong></div>${item.available === false ? '' : `<div class="stepper"><button data-item="${esc(item.id)}" data-delta="-1" aria-label="Remove ${esc(item.name)}">−</button><b>${qty}</b><button data-item="${esc(item.id)}" data-delta="1" aria-label="Add ${esc(item.name)}">+</button></div>`}</article>`; }
+function selectedItems() { return state.menu.filter(x => state.cart[x.id] > 0 && x.available !== false).map(x => ({ id:x.id, name:x.name, price:x.price, qty:state.cart[x.id] })); }
+function customer() {
+  const items = selectedItems(), total = items.reduce((n, x) => n + x.qty*x.price, 0);
+  shell(`<section class="hero"><div class="eyebrow">IIM JAMMU · NIGHT MESS</div><h1>Good food.<br><em>One quick order.</em></h1><p>Choose your favourites, check the total, and collect using your order number.</p></section><div id="notice" class="notice" hidden></div><div class="layout"><section><div class="section-head"><div><div class="eyebrow">01 / THE MENU</div><h2>What are you craving?</h2></div><span class="pill">Freshly prepared</span></div><div id="menu">${state.menu.length ? state.menu.map(itemRow).join('') : '<div class="empty">The menu is being set up. Please check back soon.</div>'}</div></section><aside class="cart"><div class="eyebrow">02 / YOUR ORDER</div><h2>Your basket</h2>${items.length ? items.map(x => `<div class="cart-line"><span>${esc(x.name)} <small>× ${x.qty}</small></span><b>${money(x.qty*x.price)}</b></div>`).join('') : '<p class="muted">Add something tasty to begin.</p>'}<div class="total"><span>Total to pay</span><strong>${money(total)}</strong></div><label for="customer-name">Your name <span>required</span></label><input id="customer-name" maxlength="40" autocomplete="name" placeholder="Name for the order" value="${esc(sessionStorage.getItem('customerName') || '')}"/><p class="hint">We’ll call your order number when it’s ready.</p><button id="place" class="primary" ${!items.length ? 'disabled' : ''}>Review order →</button></aside></div>`);
+  root.querySelectorAll('[data-item]').forEach(button => button.onclick = () => { const id=button.dataset.item, next=Math.max(0,Math.min(20,(state.cart[id]||0)+Number(button.dataset.delta))); state.cart[id]=next; const input=root.querySelector('#customer-name'); if(input) sessionStorage.setItem('customerName',input.value); customer(); });
+  root.querySelector('#place').onclick = () => review();
+}
+function review() {
+  const name=root.querySelector('#customer-name').value.trim();
+  if (name.length < 2 || name.length > 40) return notice('Please enter a name (2–40 characters).','error');
+  sessionStorage.setItem('customerName',name);
+  const items=selectedItems(); if (!items.length || items.length > 8) return notice('Choose between 1 and 8 different items.','error');
+  const total=items.reduce((sum,x)=>sum+x.price*x.qty,0);
+  shell(`<section class="narrow"><div class="eyebrow">FINAL CHECK</div><h1>Ready to order?</h1><p>Placed for <b>${esc(name)}</b></p><div class="panel">${items.map(x=>`<div class="cart-line"><span>${esc(x.name)} × ${x.qty}</span><b>${money(x.price*x.qty)}</b></div>`).join('')}<div class="total"><span>Total</span><strong>${money(total)}</strong></div></div><div id="notice" class="notice" hidden></div><div class="actions"><button id="back" class="secondary">← Edit order</button><button id="confirm" class="primary">Place order · ${money(total)}</button></div><p class="hint">Payment can be made now or after eating. Staff will record when you pay.</p></section>`);
+  root.querySelector('#back').onclick=customer;
+  root.querySelector('#confirm').onclick=()=>place(name,items,total);
+}
+function orderId() { const bytes=crypto.getRandomValues(new Uint8Array(6)); const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; return [...bytes].map(x=>alphabet[x % alphabet.length]).join(''); }
+async function place(name,items,total) {
+  const button=root.querySelector('#confirm'); button.disabled=true; button.textContent='Placing order…';
+  // Reuse the ID on retry; a lost response must not create a second order.
+  const id=sessionStorage.getItem('pendingOrder') || orderId(); sessionStorage.setItem('pendingOrder',id);
+  try {
+    const ref=doc(db,'orders',id);
+    await setDoc(ref,{customerUid:state.user.uid,customerName:name,items,total,status:'new',createdAt:serverTimestamp()});
+    sessionStorage.removeItem('pendingOrder'); state.cart={}; confirmation(id,name,total);
+  } catch(e) {
+    // A timed-out response can still mean the order was saved. Check this exact ID before offering a retry.
+    try { const existing=await getDoc(doc(db,'orders',id)); if(existing.exists() && existing.data().customerUid===state.user.uid){sessionStorage.removeItem('pendingOrder');state.cart={};confirmation(id,existing.data().customerName,existing.data().total);return;} }
+    catch (_) { /* Connectivity or a genuine number collision: keep the pending ID for now. */ }
+    button.disabled=false;button.textContent='Try placing order again';notice(errorText(e),'error');
+  }
+}
+function confirmation(id,name,total) {
+  shell(`<section class="narrow success"><div class="confetti">✦ ✧ ✦</div><div class="eyebrow">ORDER PLACED</div><h1>You're all set,<br><em>${esc(name)}!</em></h1><p>Show this number when collecting your food.</p><div class="number">#${esc(id)}</div><div class="panel"><div class="cart-line"><span>Amount to pay</span><strong>${money(total)}</strong></div><p class="hint">Please pay at the counter. If you’ll pay after eating, let the counter know; the order remains marked unpaid until payment is received.</p></div><a class="primary link-button" href="/">Place another order</a></section>`);
+}
+async function login() {
+  shell(`<section class="narrow"><div class="eyebrow">STAFF ACCESS</div><h1>Welcome back.</h1><p>Sign in to see tonight’s orders.</p><form id="login" class="panel"><label>Email</label><input name="email" type="email" required autocomplete="username"/><label>Password</label><input name="password" type="password" required autocomplete="current-password"/><button class="primary">Sign in →</button></form><div id="notice" class="notice" hidden></div></section>`,true);
+  root.querySelector('#login').onsubmit=async event=>{event.preventDefault(); const button=event.target.querySelector('button');button.disabled=true;try{await setPersistence(auth,browserLocalPersistence); const {user}=await signInWithEmailAndPassword(auth,event.target.email.value,event.target.password.value);state.user=user;await staff();}catch(e){button.disabled=false;notice(errorText(e),'error');}};
+}
+async function staff() {
+  clean(); const user=auth.currentUser;
+  if (!user || user.isAnonymous) return login();
+  state.user=user;
+  try { const roleDoc=await getDoc(doc(db,'staff',user.uid)); state.role=roleDoc.data()?.role; if(!['owner','kitchen'].includes(state.role)) throw new Error('This account has no staff role. Add its UID to the staff collection.'); }
+  catch(e){login();notice(errorText(e),'error');return;}
+  const unsub=onSnapshot(query(collection(db,'orders'),where('status','in',['new','preparing','ready','given'])),snap=>{
+    // Limit displayed results in the UI; database indexes and access can be refined with actual traffic.
+    state.orders=snap.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));renderStaff();
+  },e=>{renderStaff();notice(errorText(e),'error');}); state.unsubscribe.push(unsub);
+  if(state.role==='owner') state.unsubscribe.push(onSnapshot(collection(db,'payments'),snap=>{state.payments=new Map(snap.docs.map(x=>[x.id,x.data()]));renderStaff();},e=>notice(errorText(e),'error')));
+  if(state.role==='owner') state.unsubscribe.push(onSnapshot(collection(db,'menu'),snap=>{state.menu=snap.docs.map(x=>({id:x.id,...x.data()}));renderStaff();}));
+  renderStaff();
+}
+function renderStaff() {
+  const owner=state.role==='owner', orders=state.orders;
+  const active=orders.filter(x=>x.status!=='given'); const unpaid=orders.filter(x=>!state.payments.has(x.id));
+  shell(`<section class="staff-top"><div><div class="eyebrow">LIVE OPERATIONS</div><h1>${owner?'Counter & accounts':'Kitchen queue'}</h1><p>${owner?'Orders, payments and service in one place.':'Prepare, serve and clear each order.'}</p></div><button id="logout" class="secondary">Sign out</button></section><div id="notice" class="notice" hidden></div><div class="metrics"><div><b>${active.length}</b><span>In queue</span></div><div><b>${orders.length}</b><span>Orders loaded</span></div>${owner?`<div><b>${unpaid.length}</b><span>Unpaid orders loaded</span></div><div><b>${money(orders.filter(x=>state.payments.has(x.id)).reduce((n,x)=>n+x.total,0))}</b><span>Paid, loaded orders</span></div>`:''}</div>${owner?'<nav class="tabs"><button id="orders-tab">Orders</button><button id="menu-tab">Edit menu</button></nav>':''}<div id="staff-content"></div>` ,true);
+  root.querySelector('#logout').onclick=async()=>{clean();await signOut(auth);state.user=null;state.role=null;login();};
+  if(owner){root.querySelector('#orders-tab').onclick=()=>{state.selected='orders';renderStaff();};root.querySelector('#menu-tab').onclick=()=>{state.selected='menu';renderStaff();};}
+  const target=root.querySelector('#staff-content');
+  if(owner && state.selected==='menu') return renderMenu(target);
+  target.innerHTML=`<div class="section-head"><h2>${owner?'All loaded orders':'Orders to make'}</h2><span class="pill">Updates live</span></div><div class="order-grid">${(owner?orders.slice().reverse():active).map(x=>orderCard(x,owner)).join('')||'<div class="empty">No orders yet. New ones will appear here automatically.</div>'}</div>`;
+  target.querySelectorAll('[data-status]').forEach(b=>b.onclick=()=>changeStatus(b.dataset.id,b.dataset.status));
+  target.querySelectorAll('[data-pay]').forEach(b=>b.onclick=()=>changePayment(b.dataset.id,b.dataset.pay));
+  target.querySelectorAll('[data-print]').forEach(b=>b.onclick=()=>printOrder(b.dataset.print));
+}
+function orderCard(order,owner){const paid=state.payments.has(order.id),elapsed=order.givenAt&&order.createdAt?Math.max(0,Math.round((order.givenAt.seconds-order.createdAt.seconds)/60)):null;
+return `<article class="order-card ${order.status==='given'?'served':''}"><div class="order-heading"><div><div class="eyebrow">${time(order.createdAt)} · ${esc(order.status.toUpperCase())}</div><h2>#${esc(order.id)}</h2><span>${esc(order.customerName)}</span></div>${owner?`<span class="badge ${paid?'paid':'unpaid'}">${paid?'Paid':'Unpaid'}</span>`:''}</div><div class="order-lines">${(order.items||[]).map(x=>`<div><b>${x.qty}×</b> ${esc(x.name)} <span>${money(x.price*x.qty)}</span></div>`).join('')}</div><div class="order-total">Total <b>${money(order.total)}</b></div>${elapsed!==null?`<small>Given in ${elapsed} min · ${time(order.givenAt)}</small>`:''}<div class="order-actions">${order.status==='new'?`<button data-id="${order.id}" data-status="preparing">Start preparing</button>`:''}${order.status==='preparing'?`<button data-id="${order.id}" data-status="ready">Mark ready</button>`:''}${order.status==='ready'?`<button data-id="${order.id}" data-status="given">Mark given</button>`:''}<button class="secondary" data-print="${order.id}">Print slip</button>${owner?`<button class="${paid?'secondary':'pay-button'}" data-id="${order.id}" data-pay="${paid?'undo':'paid'}">${paid?'Undo payment':'Mark paid'}</button>`:''}</div></article>`;}
+async function changeStatus(id,status){try{const update={status};if(status==='given')update.givenAt=serverTimestamp();await updateDoc(doc(db,'orders',id),update);}catch(e){notice(errorText(e),'error');}}
+async function changePayment(id,action){try{if(action==='paid'){const order=state.orders.find(x=>x.id===id);if(!order)return;await setDoc(doc(db,'payments',id),{orderId:id,amount:order.total,method:'counter',paidAt:serverTimestamp(),recordedBy:state.user.uid});}else if(confirm(`Undo payment for #${id}?`)){await deleteDoc(doc(db,'payments',id));}}catch(e){notice(errorText(e),'error');}}
+function renderMenu(target){target.innerHTML=`<div class="section-head"><h2>Menu items</h2></div><form id="menu-form" class="panel menu-form"><input name="name" placeholder="Item name" maxlength="60" required/><input name="price" type="number" min="1" max="10000" step="1" placeholder="Price ₹" required/><input name="description" placeholder="Description (optional)" maxlength="100"/><button class="primary">Add item</button></form><div class="menu-admin">${state.menu.map(x=>`<div class="cart-line"><span>${esc(x.name)} · ${money(x.price)} ${x.available===false?'· Sold out':''}</span><button data-toggle="${x.id}">${x.available===false?'Make available':'Mark sold out'}</button></div>`).join('')}</div>`;target.querySelector('#menu-form').onsubmit=async e=>{e.preventDefault();let data=new FormData(e.target),name=String(data.get('name')).trim(),price=Number(data.get('price'));if(!name||!Number.isInteger(price)||price<1)return;try{await setDoc(doc(collection(db,'menu')),{name,price,description:String(data.get('description')||'').trim(),available:true});e.target.reset();}catch(err){notice(errorText(err),'error');}};target.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=async()=>{let item=state.menu.find(x=>x.id===b.dataset.toggle);try{await updateDoc(doc(db,'menu',item.id),{available:item.available===false});}catch(e){notice(errorText(e),'error');}});}
+function printOrder(id){const order=state.orders.find(x=>x.id===id);if(!order)return;const receipt=`<html><head><title>Order ${esc(id)}</title><style>body{font:16px monospace;width:72mm;margin:4mm}h1{font-size:28px}hr{border:0;border-top:1px dashed}small{font-size:12px}@media print{@page{size:80mm auto;margin:3mm}}</style></head><body><h1>#${esc(id)}</h1><p>${esc(order.customerName)} · ${time(order.createdAt)}</p><hr>${order.items.map(x=>`<p>${x.qty}× ${esc(x.name)} — ${money(x.price*x.qty)}</p>`).join('')}<hr><h2>Total: ${money(order.total)}</h2><small>Payment status: confirm with counter</small></body></html>`;const w=window.open('','_blank','width=380,height=640');if(!w)return notice('Allow pop-ups to print the slip.','error');w.document.write(receipt);w.document.close();w.onload=()=>w.print();}
+async function start(){if(!configured){shell('<section class="narrow"><h1>Setup needed</h1><p>Copy <code>.env.example</code> to <code>.env</code> and enter the credentials of a NEW Firebase project for this night mess.</p></section>');return;}if(route()==='staff'){const current=await new Promise(resolve=>{const unsubscribe=onAuthStateChanged(auth,user=>{unsubscribe();resolve(user);});});if(current&&!current.isAnonymous)return staff();return login();}try{state.user=await authReady();state.unsubscribe.push(onSnapshot(collection(db,'menu'),snap=>{state.menu=snap.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>a.name.localeCompare(b.name));customer();},e=>notice(errorText(e),'error')));customer();}catch(e){shell(`<section class="narrow"><h1>Unable to open the menu</h1><p>${esc(errorText(e))}</p></section>`);}}
+start();
