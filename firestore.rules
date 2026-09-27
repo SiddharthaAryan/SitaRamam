@@ -68,7 +68,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['orderId','amount','method','paidAt','recordedBy'])
         && request.resource.data.orderId == id
         && request.resource.data.amount == get(/databases/$(database)/documents/orders/$(id)).data.total
-        && request.resource.data.method == 'counter'
+        && request.resource.data.method in ['cash', 'upi']
         && request.resource.data.recordedBy == request.auth.uid
         && request.resource.data.paidAt == request.time;
       allow delete: if owner();
