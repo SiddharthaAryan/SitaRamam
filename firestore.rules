@@ -1,0 +1,82 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function staffRole() {
+      return signedIn() && exists(/databases/$(database)/documents/staff/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/staff/$(request.auth.uid)).data.role : 'none';
+    }
+    function owner() { return staffRole() == 'owner'; }
+    function worker() { return staffRole() in ['owner', 'kitchen']; }
+    function validItem(lines, i) {
+      return lines.size() <= i || (
+        lines[i] is map && lines[i].keys().hasAll(['id','name','price','qty'])
+        && lines[i].keys().hasOnly(['id','name','price','qty'])
+        && lines[i].id is string && lines[i].id.size() > 0
+        && lines[i].name is string && lines[i].name.size() > 0
+        && lines[i].qty is int && lines[i].qty >= 1 && lines[i].qty <= 20
+        && lines[i].price is int && lines[i].price >= 1
+        && exists(/databases/$(database)/documents/menu/$(lines[i].id))
+        && get(/databases/$(database)/documents/menu/$(lines[i].id)).data.available == true
+        && lines[i].name == get(/databases/$(database)/documents/menu/$(lines[i].id)).data.name
+        && lines[i].price == get(/databases/$(database)/documents/menu/$(lines[i].id)).data.price
+      );
+    }
+    function lineTotal(lines, i) { return lines.size() <= i ? 0 : lines[i].price * lines[i].qty; }
+    function validOrder() {
+      let lines = request.resource.data.items;
+      return request.resource.data.keys().hasAll(['customerUid','customerName','items','total','status','createdAt'])
+        && request.resource.data.keys().hasOnly(['customerUid','customerName','items','total','status','createdAt'])
+        && request.resource.data.customerUid == request.auth.uid
+        && request.resource.data.customerName is string
+        && request.resource.data.customerName.size() >= 2 && request.resource.data.customerName.size() <= 40
+        && lines is list && lines.size() >= 1 && lines.size() <= 8
+        && validItem(lines,0) && validItem(lines,1) && validItem(lines,2) && validItem(lines,3)
+        && validItem(lines,4) && validItem(lines,5) && validItem(lines,6) && validItem(lines,7)
+        && request.resource.data.total is int
+        && request.resource.data.total == (lineTotal(lines,0)+lineTotal(lines,1)+lineTotal(lines,2)+lineTotal(lines,3)
+          +lineTotal(lines,4)+lineTotal(lines,5)+lineTotal(lines,6)+lineTotal(lines,7))
+        && request.resource.data.total > 0 && request.resource.data.total <= 1600000
+        && request.resource.data.status == 'new'
+        && request.resource.data.createdAt == request.time;
+    }
+    match /menu/{id} {
+      allow read: if true;
+      allow create, update, delete: if owner()
+        && request.resource.data.keys().hasAll(['name','price','description','available'])
+        && request.resource.data.keys().hasOnly(['name','price','description','available'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+        && request.resource.data.price is int && request.resource.data.price >= 1 && request.resource.data.price <= 10000
+        && request.resource.data.description is string && request.resource.data.description.size() <= 100
+        && request.resource.data.available is bool;
+    }
+    match /orders/{id} {
+      allow create: if signedIn() && id.matches('[A-Z2-9]{6}') && validOrder();
+      allow read: if worker() || (signedIn() && resource.data.customerUid == request.auth.uid);
+      allow update: if worker()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','givenAt'])
+        && ((resource.data.status == 'new' && request.resource.data.status == 'preparing')
+          || (resource.data.status == 'preparing' && request.resource.data.status == 'ready')
+          || (resource.data.status == 'ready' && request.resource.data.status == 'given'
+            && request.resource.data.givenAt == request.time));
+      allow delete: if false;
+    }
+    match /payments/{id} {
+      allow read: if owner();
+      allow create: if owner() && exists(/databases/$(database)/documents/orders/$(id))
+        && request.resource.data.keys().hasAll(['orderId','amount','method','paidAt','recordedBy'])
+        && request.resource.data.keys().hasOnly(['orderId','amount','method','paidAt','recordedBy'])
+        && request.resource.data.orderId == id
+        && request.resource.data.amount == get(/databases/$(database)/documents/orders/$(id)).data.total
+        && request.resource.data.method == 'counter'
+        && request.resource.data.recordedBy == request.auth.uid
+        && request.resource.data.paidAt == request.time;
+      allow delete: if owner();
+      allow update: if false;
+    }
+    match /staff/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false; // Bootstrap roles in the Firebase console or Admin SDK only.
+    }
+  }
+}
