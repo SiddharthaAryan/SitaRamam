@@ -1,6 +1,6 @@
 # SitaRamam Night Mess
 
-QR ordering for students, a live kitchen queue, and an owner-only payment ledger. Uses Firebase Hosting, Firebase Authentication (anonymous customers and email/password staff), and Cloud Firestore on a dedicated project.
+The repository is named SitaRamam; the customer-facing name follows the supplied Rassense Pvt Ltd printed night menu. QR ordering for students, a live kitchen queue, and an owner-only payment ledger. Uses Firebase Hosting, Firebase Authentication (anonymous customers and email/password staff), and Cloud Firestore on a dedicated project.
 
 ## Setup
 
@@ -9,7 +9,7 @@ QR ordering for students, a live kitchen queue, and an owner-only payment ledger
 3. `npm install && npm run dev`. The student page is `/`; the staff page is `/staff`.
 4. Install Firebase CLI (`npm install -g firebase-tools`), then `firebase login` and `firebase use --add`. Select only the dedicated night-mess project. Deploy rules with `firebase deploy --only firestore:rules --project YOUR_NIGHT_MESS_PROJECT_ID`.
 5. In Firebase Authentication, create your brother's email/password account and each kitchen account. Copy each account UID. In Firestore console create `staff/{UID}` with field `role` set to `owner` for your brother and `kitchen` for chefs. The app cannot create or alter these role documents.
-6. Your brother signs in at `/staff` and adds real items and prices. Test on Firebase emulators before accepting actual orders. Build with `npm run build` and deploy with `firebase deploy --only hosting --project YOUR_NIGHT_MESS_PROJECT_ID`. Generate a QR for the deployed customer URL after testing.
+6. Your brother signs in at `/staff` and uses **Load the 12 items from the printed menu**, then checks prices and availability. The menu shows 11:00 PM–3:00 AM and the printed estimate of 10–15 minutes; hours are informational and do not automatically disable ordering. Test on Firebase emulators before accepting actual orders. Build with `npm run build` and deploy with `firebase deploy --only hosting --project YOUR_NIGHT_MESS_PROJECT_ID`. Generate a QR for the deployed customer URL after testing.
 
 The app deliberately has no Firebase project ID embedded in the repository. The actual project configuration must be supplied as environment variables. Do not connect this repository to the Family E-Card or HR portal project.
 
