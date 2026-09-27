@@ -24,7 +24,7 @@ const day = value => value?.toDate ? new Intl.DateTimeFormat('en-CA',{timeZone:'
 const time = value => value?.toDate ? value.toDate().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : 'Just now';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
 const route = () => location.pathname.startsWith('/staff') ? 'staff' : 'customer';
-const errorText = e => ({'permission-denied':'Access denied. Check your staff role and database rules.','unauthenticated':'Please sign in again.','unavailable':'Connection lost. Check your internet and retry.','resource-exhausted':'Service limit reached. Please order at the counter.'}[e.code] || e.message || 'Something went wrong.');
+const errorText = e => ({'permission-denied':'Access denied. Check your staff role and database rules.','unauthenticated':'Please sign in again.','unavailable':'Connection lost. Check your internet and retry.','resource-exhausted':'Service limit reached. Please order at the counter.','auth/invalid-credential':'Incorrect password for this station.'}[e.code] || e.message || 'Something went wrong.');
 function shell(body, staff=false) { root.innerHTML = `<header><a class="brand" href="/">✦ Rassense <span>Night Mess</span></a>${staff ? '<a href="/">Customer view ↗</a>' : '<a href="/staff">Staff sign in</a>'}</header><main>${body}</main><footer>Made for late night cravings · IIM Jammu</footer>`; }
 function notice(message, kind='info') { state.status = message; const target = document.querySelector('#notice'); if (target) { target.hidden = false; target.className = `notice ${kind}`; target.textContent = message; } }
 function clean() { state.unsubscribe.forEach(unsub => unsub()); state.unsubscribe = []; }
@@ -66,8 +66,19 @@ function confirmation(id,name,total) {
   shell(`<section class="narrow success"><div class="confetti">✦ ✧ ✦</div><div class="eyebrow">ORDER PLACED</div><h1>You're all set,<br><em>${esc(name)}!</em></h1><p>Show this number when collecting your food.</p><div class="number">#${esc(id)}</div><div class="panel"><div class="cart-line"><span>Amount to pay</span><strong>${money(total)}</strong></div><p class="hint">Please pay at the counter. If you’ll pay after eating, let the counter know; the order remains marked unpaid until payment is received.</p></div><a class="primary link-button" href="/">Place another order</a></section>`);
 }
 async function login() {
-  shell(`<section class="narrow"><div class="eyebrow">STAFF ACCESS</div><h1>Welcome back.</h1><p>Sign in to see tonight’s orders.</p><form id="login" class="panel"><label>Email</label><input name="email" type="email" required autocomplete="username"/><label>Password</label><input name="password" type="password" required autocomplete="current-password"/><button class="primary">Sign in →</button></form><div id="notice" class="notice" hidden></div></section>`,true);
-  root.querySelector('#login').onsubmit=async event=>{event.preventDefault(); const button=event.target.querySelector('button');button.disabled=true;try{await setPersistence(auth,browserLocalPersistence); const {user}=await signInWithEmailAndPassword(auth,event.target.elements.namedItem('email').value,event.target.elements.namedItem('password').value);state.user=user;await staff();}catch(e){button.disabled=false;notice(errorText(e),'error');}};
+  shell(`<section class="narrow"><div class="eyebrow">STAFF ACCESS</div><h1>Welcome back.</h1><p>Choose your station and enter its password.</p><form id="login" class="panel"><label for="station">Station</label><select id="station" name="station"><option value="owner">Counter / owner</option><option value="kitchen">Kitchen</option></select><label for="password">Password</label><input id="password" name="password" type="password" required autocomplete="current-password"/><button class="primary">Sign in →</button></form><div id="notice" class="notice" hidden></div></section>`,true);
+  root.querySelector('#login').onsubmit=async event=>{
+    event.preventDefault();const button=event.target.querySelector('button');button.disabled=true;
+    const station=event.target.elements.namedItem('station').value;
+    const loginEmail=station==='owner' ? import.meta.env.VITE_OWNER_LOGIN_EMAIL : import.meta.env.VITE_KITCHEN_LOGIN_EMAIL;
+    try {
+      if(!loginEmail) throw new Error('This station is not configured yet.');
+      await setPersistence(auth,browserLocalPersistence);
+      const {user}=await signInWithEmailAndPassword(auth,loginEmail,event.target.elements.namedItem('password').value);
+      state.user=user;await staff();
+      if(state.role!==station){clean();await signOut(auth);state.role=null;login();notice('This password does not belong to the selected station.','error');}
+    }catch(e){button.disabled=false;notice(errorText(e),'error');}
+  };
 }
 async function staff() {
   clean(); const user=auth.currentUser;
