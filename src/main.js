@@ -23,9 +23,12 @@ const money = n => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 const day = value => value?.toDate ? new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(value.toDate()) : '';
 const time = value => value?.toDate ? value.toDate().toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : 'Just now';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
-const route = () => location.pathname.startsWith('/staff') ? 'staff' : 'customer';
+const siteBase = import.meta.env.BASE_URL;
+const homeUrl = siteBase;
+const staffUrl = `${siteBase}staff`;
+const route = () => location.pathname.replace(/\/$/, '') === staffUrl.replace(/\/$/, '') ? 'staff' : 'customer';
 const errorText = e => ({'permission-denied':'Access denied. Check your staff role and database rules.','unauthenticated':'Please sign in again.','unavailable':'Connection lost. Check your internet and retry.','resource-exhausted':'Service limit reached. Please order at the counter.','auth/invalid-credential':'Incorrect password for this station.'}[e.code] || e.message || 'Something went wrong.');
-function shell(body, staff=false) { root.innerHTML = `<header><a class="brand" href="/">✦ Rassense <span>Night Mess</span></a>${staff ? '<a href="/">Customer view ↗</a>' : '<a href="/staff">Staff sign in</a>'}</header><main>${body}</main><footer>Made for late night cravings · IIM Jammu</footer>`; }
+function shell(body, staff=false) { root.innerHTML = `<header><a class="brand" href="${homeUrl}">✦ Rassense <span>Night Mess</span></a>${staff ? `<a href="${homeUrl}">Customer view ↗</a>` : `<a href="${staffUrl}">Staff sign in</a>`}</header><main>${body}</main><footer>Made for late night cravings · IIM Jammu</footer>`; }
 function notice(message, kind='info') { state.status = message; const target = document.querySelector('#notice'); if (target) { target.hidden = false; target.className = `notice ${kind}`; target.textContent = message; } }
 function clean() { state.unsubscribe.forEach(unsub => unsub()); state.unsubscribe = []; }
 function itemRow(item) { const qty = state.cart[item.id] || 0; return `<article class="item"><div><div class="item-title">${esc(item.name)} ${item.available === false ? '<small>Sold out</small>' : ''}</div><p>${esc(item.description || '')}</p><strong>${money(item.price)}</strong></div>${item.available === false ? '' : `<div class="stepper"><button data-item="${esc(item.id)}" data-delta="-1" aria-label="Remove ${esc(item.name)}">−</button><b>${qty}</b><button data-item="${esc(item.id)}" data-delta="1" aria-label="Add ${esc(item.name)}">+</button></div>`}</article>`; }
@@ -63,7 +66,7 @@ async function place(name,items,total) {
   }
 }
 function confirmation(id,name,total) {
-  shell(`<section class="narrow success"><div class="confetti">✦ ✧ ✦</div><div class="eyebrow">ORDER PLACED</div><h1>You're all set,<br><em>${esc(name)}!</em></h1><p>Show this number when collecting your food.</p><div class="number">#${esc(id)}</div><div class="panel"><div class="cart-line"><span>Amount to pay</span><strong>${money(total)}</strong></div><p class="hint">Please pay at the counter. If you’ll pay after eating, let the counter know; the order remains marked unpaid until payment is received.</p></div><a class="primary link-button" href="/">Place another order</a></section>`);
+  shell(`<section class="narrow success"><div class="confetti">✦ ✧ ✦</div><div class="eyebrow">ORDER PLACED</div><h1>You're all set,<br><em>${esc(name)}!</em></h1><p>Show this number when collecting your food.</p><div class="number">#${esc(id)}</div><div class="panel"><div class="cart-line"><span>Amount to pay</span><strong>${money(total)}</strong></div><p class="hint">Please pay at the counter. If you’ll pay after eating, let the counter know; the order remains marked unpaid until payment is received.</p></div><a class="primary link-button" href="${homeUrl}">Place another order</a></section>`);
 }
 async function login() {
   shell(`<section class="narrow"><div class="eyebrow">STAFF ACCESS</div><h1>Welcome back.</h1><p>Choose your station and enter its password.</p><form id="login" class="panel"><label for="station">Station</label><select id="station" name="station"><option value="owner">Counter / owner</option><option value="kitchen">Kitchen</option></select><label for="password">Password</label><input id="password" name="password" type="password" required autocomplete="current-password"/><button class="primary">Sign in →</button></form><div id="notice" class="notice" hidden></div></section>`,true);
