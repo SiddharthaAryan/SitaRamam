@@ -20,3 +20,5 @@ footer{max-width:1200px;margin:auto;border-top:1px solid #ede0d4;padding:27px 0;
 
 /* Keep small supporting text readable on the warm surfaces. */
 .menu-count,.hint,.basket-empty p,.item-category,.cart-line small,.fine-print,.recipient,.receipt-reminder,.metrics span,.order-card small,.receipt-footer{color:#806977}.payment-panel .hint,.recipient{color:#8c655d}.item-category{color:#946a55}.menu-search input::placeholder,input::placeholder{color:#8c7583}.qr-frame>span{color:#866d65}.footer-campus{color:#8d7772}
+
+.preview-note{font-size:11px;line-height:1.7;color:#845a4d;background:#fff0e2;border:1px solid #eed0b9;border-radius:12px;padding:12px 14px;margin:-2px 0 18px}.item p{min-height:30px;margin:-4px 0 12px}.item-content{display:flex;flex-direction:column}.item-bottom{margin-top:auto}

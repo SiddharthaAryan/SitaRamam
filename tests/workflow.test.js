@@ -7,13 +7,15 @@ import {JSDOM} from 'jsdom';
 import QRCode from 'qrcode';
 import {accounts,day,csv} from '../src/accounts.js';
 import {icon,category,foodArt} from '../src/visuals.js';
+import {PRINTED_MENU,menuOrder} from '../src/menu.js';
 
 function app() {
   const dom=new JSDOM('<div id="app"></div>',{url:'https://example.test/'});
   const writes=[];dom.window.scrollTo=()=>{};
-  const context=vm.createContext({document:dom.window.document,window:dom.window,sessionStorage:dom.window.sessionStorage,location:dom.window.location,crypto:webcrypto,QRCode,accounts,day,csv,icon,category,foodArt,URL,Blob,Intl,console,setTimeout,auth:{},db:{},doc:(_db,collection,id)=>({collection,id}),serverTimestamp:()=>({sentinel:true}),setDoc:async(ref,data)=>writes.push({ref,data})});
+  const context=vm.createContext({document:dom.window.document,window:dom.window,sessionStorage:dom.window.sessionStorage,location:dom.window.location,crypto:webcrypto,QRCode,accounts,day,csv,icon,category,foodArt,PRINTED_MENU,menuOrder,URL,Blob,Intl,console,setTimeout,auth:{},db:{},doc:(_db,collection,id)=>({collection,id}),serverTimestamp:()=>({sentinel:true}),setDoc:async(ref,data)=>writes.push({ref,data})});
   const source=readFileSync(new URL('../src/main.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/import\.meta\.env\.BASE_URL/g,"'/'").replace(/import\.meta\.env\.[A-Z_]+/g,"''").replace(/\nstart\(\);\s*$/,'');
   vm.runInContext(source+'\nglobalThis.api={state,customer,review,place,confirmation,renderStaff,orderCard};',context);
+  context.api.state.menuReady=true;
   return {api:context.api,document:dom.window.document,writes};
 }
 test('placing an order creates food record only, and displays unpaid bill with exact UPI amount',async()=>{
@@ -56,4 +58,13 @@ test('menu filtering preserves the name and basket while finding matching food',
   const search=document.querySelector('#menu-search');search.value='paratha';search.dispatchEvent(new document.defaultView.Event('input'));
   assert.equal(document.querySelectorAll('.item').length,1);assert.match(document.querySelector('.item').textContent,/Aloo Paratha/);
   assert.equal(document.querySelector('#customer-name').value,'Aryan');
+});
+test('the printed menu remains browsable before activation and cannot create unvalidated orders',async()=>{
+  const {api,document,writes}=app();
+  api.state.menuReady=false;api.state.menu=PRINTED_MENU;api.state.cart={tea:1};api.customer();
+  assert.equal(document.querySelectorAll('.item').length,12);
+  assert.equal(document.querySelector('#place').disabled,true);
+  assert.match(document.querySelector('.preview-note').textContent,/Digital orders open soon/);
+  api.review();await api.place('Test',[{id:'tea',name:'Tea',price:20,qty:1}],20);
+  assert.equal(writes.length,0);assert.equal(api.state.screen,'menu');
 });
