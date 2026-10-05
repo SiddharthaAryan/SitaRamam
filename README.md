@@ -31,3 +31,7 @@ The build workflow supplies the dedicated night-mess Firebase web configuration.
 ## Validation
 
 Run `npm test` and `npm run build`. The workflow checks customer order creation, owner-only payment controls, IST date rollover, late collections, month filters, and spreadsheet-safe exports before deployment. These tests use isolated DOM/database mocks; real staff authentication, deployed rules, printer behavior, and UPI app launch must also be verified on actual devices.
+
+## Interface
+
+Student screens use a violet/coral gradient hero, original SVG food illustrations, category filters, menu search, a mobile basket shortcut, and an itemised ticket-style checkout. Transitions and decorative motion respect `prefers-reduced-motion`; changes of ordering stage return to the top of the page. Quantity changes preserve the entered name. The owner dashboard uses restrained colours for live operations and accounting.

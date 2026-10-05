@@ -6,11 +6,12 @@ import {webcrypto} from 'node:crypto';
 import {JSDOM} from 'jsdom';
 import QRCode from 'qrcode';
 import {accounts,day,csv} from '../src/accounts.js';
+import {icon,category,foodArt} from '../src/visuals.js';
 
 function app() {
   const dom=new JSDOM('<div id="app"></div>',{url:'https://example.test/'});
-  const writes=[];
-  const context=vm.createContext({document:dom.window.document,window:dom.window,sessionStorage:dom.window.sessionStorage,location:dom.window.location,crypto:webcrypto,QRCode,accounts,day,csv,URL,Blob,Intl,console,setTimeout,auth:{},db:{},doc:(_db,collection,id)=>({collection,id}),serverTimestamp:()=>({sentinel:true}),setDoc:async(ref,data)=>writes.push({ref,data})});
+  const writes=[];dom.window.scrollTo=()=>{};
+  const context=vm.createContext({document:dom.window.document,window:dom.window,sessionStorage:dom.window.sessionStorage,location:dom.window.location,crypto:webcrypto,QRCode,accounts,day,csv,icon,category,foodArt,URL,Blob,Intl,console,setTimeout,auth:{},db:{},doc:(_db,collection,id)=>({collection,id}),serverTimestamp:()=>({sentinel:true}),setDoc:async(ref,data)=>writes.push({ref,data})});
   const source=readFileSync(new URL('../src/main.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/import\.meta\.env\.BASE_URL/g,"'/'").replace(/import\.meta\.env\.[A-Z_]+/g,"''").replace(/\nstart\(\);\s*$/,'');
   vm.runInContext(source+'\nglobalThis.api={state,customer,review,place,confirmation,renderStaff,orderCard};',context);
   return {api:context.api,document:dom.window.document,writes};
@@ -43,4 +44,16 @@ test('owner can search by number or name and switch month reports',()=>{
   api.state.search='#ABC234';api.renderStaff();assert.equal(document.querySelectorAll('.order-card').length,1);
   api.state.search='other';api.renderStaff();assert.match(document.querySelector('.order-card').textContent,/DEF567/);
   api.state.search='';api.state.reportPeriod='month';api.renderStaff();assert.equal(document.querySelector('#report-date').type,'month');assert.match(document.querySelector('#export-payments').textContent,/month collections/);
+});
+test('menu filtering preserves the name and basket while finding matching food',()=>{
+  const {api,document}=app();
+  api.state.menu=[{id:'tea',name:'Tea',price:20,available:true},{id:'aloo',name:'Aloo Paratha',price:40,available:true}];
+  api.state.cart={aloo:2};api.customer();document.querySelector('#customer-name').value='Aryan';
+  document.querySelector('[data-category="Drinks"]').click();
+  assert.equal(document.querySelectorAll('.item').length,1);assert.match(document.querySelector('.item').textContent,/Tea/);
+  assert.equal(document.querySelector('#customer-name').value,'Aryan');assert.equal(api.state.cart.aloo,2);
+  document.querySelector('[data-category="All"]').click();
+  const search=document.querySelector('#menu-search');search.value='paratha';search.dispatchEvent(new document.defaultView.Event('input'));
+  assert.equal(document.querySelectorAll('.item').length,1);assert.match(document.querySelector('.item').textContent,/Aloo Paratha/);
+  assert.equal(document.querySelector('#customer-name').value,'Aryan');
 });
