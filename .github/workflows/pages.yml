@@ -23,6 +23,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Check ordering and accounting
+        run: npm test
       - name: Build app
         run: npm run build
         env:

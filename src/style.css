@@ -6,3 +6,4 @@
 .order-actions select{border:1px solid #d9e1d6;border-radius:9px;background:#fff;color:#24553b;padding:8px}
 
 #login select,.report-controls select{border:1px solid #d6dfd5;border-radius:9px;padding:13px 14px;background:#fff;width:100%;font:inherit;color:#17352a}
+.payment-panel{text-align:center!important}.payment-panel img{display:block;width:min(280px,100%);height:auto;margin:12px auto;border-radius:12px}.receipt small{display:block}.payment-panel p{line-height:1.6}.report-controls label{min-width:130px}.report-controls input{max-width:240px}.metrics{grid-template-columns:repeat(4,minmax(0,1fr))}@media(max-width:760px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.actions{flex-wrap:wrap}}
