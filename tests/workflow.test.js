@@ -29,7 +29,7 @@ test('placing an order creates food record only, and displays unpaid bill with e
   assert.equal(uri.searchParams.get('pa'),'paytm.s119vgx@pty');assert.equal(uri.searchParams.get('am'),'40.00');
   assert.equal(document.querySelectorAll('[data-pay]').length,0);assert.equal(document.body.textContent.includes('I paid'),false);
   assert.match(document.querySelector('.receipt').textContent,/Tea/);assert.match(document.querySelector('.number').textContent,/^1$/);
-  assert.equal(api.state.screen,'receipt');
+  assert.equal(api.state.screen,'receipt');assert.equal(document.querySelector('.order-confirmed-dialog').hasAttribute('open'),true);assert.equal(document.querySelector('.confirmed-number').textContent,'1');assert.match(document.querySelector('.confirmed-instruction').textContent,/payment proof at the desk/);
 });
 test('payment controls and account summaries are owner-only; served unpaid orders remain outstanding',()=>{
   const {api,document}=app();
