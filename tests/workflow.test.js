@@ -72,7 +72,7 @@ test('the printed menu remains browsable before activation and cannot create unv
 test('customer navigation has no staff link and quantity controls expand after adding',()=>{
  const {api,document}=app();api.customer();
  assert.equal(document.querySelector('a[href="/staff"]'),null);
- const add=document.querySelector('.add-cart');assert.match(add.textContent,/Add to basket/);add.click();
+ const add=document.querySelector('.add-cart');assert.match(add.textContent,/ADD/);add.click();
  assert.equal(document.querySelector('.stepper b').textContent,'1');
  assert.match(document.querySelector('.selected-label').textContent,/1 in your basket/);
 });
@@ -82,4 +82,13 @@ test('review edits quantities and totals without losing the basket or customer n
  assert.equal(api.state.screen,'review');assert.match(document.querySelector('.total').textContent,/₹40/);
  document.querySelector('[data-review="tea"][data-delta="1"]').click();assert.match(document.querySelector('.total').textContent,/₹60/);
  document.querySelector('#back').click();assert.equal(api.state.cart.tea,3);assert.match(document.querySelector('.section-head').textContent,/Welcome Siddhartha/);
+});
+
+test('menu has dietary labels, category headings and unambiguous basket action',()=>{
+ const {api,document}=app();api.state.cart={tea:1};api.customer();
+ assert.equal(document.querySelectorAll('.menu-group-heading').length,3);
+ assert.match(document.querySelector('#mobile-review').textContent,/View basket/);
+ assert.match(document.querySelector('.mobile-basket').textContent,/1 item · ₹20/);
+ assert.equal(document.querySelectorAll('.diet-label.nonveg').length,3);
+ assert.equal(document.querySelectorAll('.diet-label.egg').length,2);
 });
