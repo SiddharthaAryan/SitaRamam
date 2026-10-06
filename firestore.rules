@@ -23,10 +23,10 @@ service cloud.firestore {
       );
     }
     function lineTotal(lines, i) { return lines.size() <= i ? 0 : lines[i].price * lines[i].qty; }
-    function validOrder() {
+    function validOrder(orderId) {
       let lines = request.resource.data.items;
-      return request.resource.data.keys().hasAll(['customerUid','customerName','items','total','status','createdAt'])
-        && request.resource.data.keys().hasOnly(['customerUid','customerName','items','total','status','createdAt'])
+      return request.resource.data.keys().hasAll(['customerUid','customerName','items','total','status','createdAt','orderNumber','orderDay'])
+        && request.resource.data.keys().hasOnly(['customerUid','customerName','items','total','status','createdAt','orderNumber','orderDay'])
         && request.resource.data.customerUid == request.auth.uid
         && request.resource.data.customerName is string
         && request.resource.data.customerName.size() >= 2 && request.resource.data.customerName.size() <= 40
@@ -38,7 +38,11 @@ service cloud.firestore {
           +lineTotal(lines,4)+lineTotal(lines,5)+lineTotal(lines,6)+lineTotal(lines,7))
         && request.resource.data.total > 0 && request.resource.data.total <= 1600000
         && request.resource.data.status == 'new'
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.orderNumber is int && request.resource.data.orderNumber > 0
+        && request.resource.data.orderDay.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && getAfter(/databases/$(database)/documents/dailyCounters/$(request.resource.data.orderDay)).data.lastNumber == request.resource.data.orderNumber
+        && getAfter(/databases/$(database)/documents/dailyCounters/$(request.resource.data.orderDay)).data.lastOrderId == orderId;
     }
     match /menu/{id} {
       allow read: if true;
@@ -51,8 +55,9 @@ service cloud.firestore {
         && request.resource.data.available is bool;
     }
     match /orders/{id} {
-      allow create: if signedIn() && id.matches('[A-Z2-9]{6}') && validOrder();
-      allow read: if worker() || (signedIn() && resource.data.customerUid == request.auth.uid);
+      allow create: if signedIn() && id.matches('[A-Z2-9]{6}') && validOrder(id);
+      allow get: if signedIn() && (resource == null || worker() || resource.data.customerUid == request.auth.uid);
+      allow list: if worker() || (signedIn() && resource.data.customerUid == request.auth.uid);
       allow update: if worker()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','givenAt'])
         && ((resource.data.status == 'new' && request.resource.data.status == 'preparing')
@@ -60,6 +65,19 @@ service cloud.firestore {
           || (resource.data.status == 'ready' && request.resource.data.status == 'given'
             && request.resource.data.givenAt == request.time));
       allow delete: if false;
+    }
+    match /dailyCounters/{date} {
+      allow get: if signedIn();
+      allow list, delete: if false;
+      allow create, update: if signedIn() && date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && request.resource.data.keys().hasOnly(['lastNumber','lastOrderId','updatedAt'])
+        && request.resource.data.lastNumber is int
+        && request.resource.data.lastNumber == (resource == null ? 1 : resource.data.lastNumber + 1)
+        && request.resource.data.updatedAt == request.time
+        && !exists(/databases/$(database)/documents/orders/$(request.resource.data.lastOrderId))
+        && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.lastOrderId)).data.customerUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.lastOrderId)).data.orderDay == date
+        && getAfter(/databases/$(database)/documents/orders/$(request.resource.data.lastOrderId)).data.orderNumber == request.resource.data.lastNumber;
     }
     match /payments/{id} {
       allow read: if owner();

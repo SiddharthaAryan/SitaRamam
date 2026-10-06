@@ -12,7 +12,7 @@ import {PRINTED_MENU,menuOrder} from '../src/menu.js';
 function app() {
   const dom=new JSDOM('<div id="app"></div>',{url:'https://example.test/'});
   const writes=[];dom.window.scrollTo=()=>{};
-  const context=vm.createContext({document:dom.window.document,window:dom.window,sessionStorage:dom.window.sessionStorage,location:dom.window.location,crypto:webcrypto,QRCode,accounts,day,csv,icon,category,foodArt,PRINTED_MENU,menuOrder,URL,Blob,Intl,console,setTimeout,auth:{},db:{},doc:(_db,collection,id)=>({collection,id}),serverTimestamp:()=>({sentinel:true}),setDoc:async(ref,data)=>writes.push({ref,data})});
+  const context=vm.createContext({document:dom.window.document,window:dom.window,sessionStorage:dom.window.sessionStorage,location:dom.window.location,crypto:webcrypto,QRCode,accounts,day,csv,icon,category,foodArt,PRINTED_MENU,menuOrder,URL,Blob,Intl,console,setTimeout,auth:{},db:{},doc:(_db,collection,id)=>({collection,id}),serverTimestamp:()=>({sentinel:true}),setDoc:async(ref,data)=>writes.push({ref,data}),runTransaction:async(_db,fn)=>fn({get:async()=>({exists:()=>false}),set:(ref,data)=>writes.push({ref,data})})});
   const source=readFileSync(new URL('../src/main.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/import\.meta\.env\.BASE_URL/g,"'/'").replace(/import\.meta\.env\.[A-Z_]+/g,"''").replace(/\nstart\(\);\s*$/,'');
   vm.runInContext(source+'\nglobalThis.api={state,customer,review,place,confirmation,renderStaff,orderCard};',context);
   context.api.state.menuReady=true;
@@ -23,12 +23,12 @@ test('placing an order creates food record only, and displays unpaid bill with e
   api.state.user={uid:'student'};api.state.menu=[{id:'tea',name:'Tea',price:20,available:true}];api.state.cart={tea:2};
   api.customer();document.querySelector('#customer-name').value='Student Test';api.review();
   await api.place('Student Test',[{id:'tea',name:'Tea',price:20,qty:2}],40);
-  assert.equal(writes.length,1);assert.equal(writes[0].ref.collection,'orders');assert.equal(writes[0].data.total,40);assert.equal(writes[0].data.status,'new');assert.equal('paymentStatus' in writes[0].data,false);
+  assert.equal(writes.length,2);assert.equal(writes[0].ref.collection,'dailyCounters');assert.equal(writes[1].ref.collection,'orders');assert.equal(writes[1].data.total,40);assert.equal(writes[1].data.status,'new');assert.equal(writes[1].data.orderNumber,1);assert.equal('paymentStatus' in writes[1].data,false);
   assert.equal(document.querySelector('.badge').textContent,'UNPAID');
   const link=document.querySelector('a[href^="upi:"]');const uri=new URL(link.href);
   assert.equal(uri.searchParams.get('pa'),'paytm.s119vgx@pty');assert.equal(uri.searchParams.get('am'),'40.00');
   assert.equal(document.querySelectorAll('[data-pay]').length,0);assert.equal(document.body.textContent.includes('I paid'),false);
-  assert.match(document.querySelector('.receipt').textContent,/Tea/);assert.match(document.querySelector('.number').textContent,/^#[A-Z2-9]{6}$/);
+  assert.match(document.querySelector('.receipt').textContent,/Tea/);assert.match(document.querySelector('.number').textContent,/^1$/);
   assert.equal(api.state.screen,'receipt');
 });
 test('payment controls and account summaries are owner-only; served unpaid orders remain outstanding',()=>{
@@ -67,4 +67,12 @@ test('the printed menu remains browsable before activation and cannot create unv
   assert.match(document.querySelector('.preview-note').textContent,/Digital orders open soon/);
   api.review();await api.place('Test',[{id:'tea',name:'Tea',price:20,qty:1}],20);
   assert.equal(writes.length,0);assert.equal(api.state.screen,'menu');
+});
+
+test('customer navigation has no staff link and quantity controls expand after adding',()=>{
+ const {api,document}=app();api.customer();
+ assert.equal(document.querySelector('a[href="/staff"]'),null);
+ const add=document.querySelector('.add-cart');assert.match(add.textContent,/Add to basket/);add.click();
+ assert.equal(document.querySelector('.stepper b').textContent,'1');
+ assert.match(document.querySelector('.selected-label').textContent,/1 in your basket/);
 });

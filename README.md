@@ -37,3 +37,8 @@ Run `npm test` and `npm run build`. The workflow checks customer order creation,
 Student screens use a violet/coral gradient hero, original SVG food illustrations, category filters, menu search, a mobile basket shortcut, and an itemised ticket-style checkout. Transitions and decorative motion respect `prefers-reduced-motion`; changes of ordering stage return to the top of the page. Quantity changes preserve the entered name. The owner dashboard uses restrained colours for live operations and accounting.
 
 The printed menu is visible immediately as a preview when the database menu is empty. Basket totals can be calculated, but order placement is disabled until the live menu is activated. Known portions are included in the stored item names so kitchen slips and historical order records retain serving details.
+
+## Mobile ordering and daily numbers
+Customer navigation has no staff link. Staff use `/staff` directly. Mobile cards offer large Add to basket buttons and 48px quantity controls. New orders display numeric daily sequences (1, 2, 3...), restarting at midnight IST. The internal document ID stays separate from the displayed number, preventing collisions between dates. A Firestore transaction allocates the number and food record together; retrying the pending request reuses the existing order.
+
+**Deployment prerequisite:** publish the repository's updated `firestore.rules` to project `night-mess-90b05`. GitHub Pages does not deploy Firebase rules. Until the counter read is allowed and the menu exists, customer checkout remains disabled. No Blaze plan or Cloud Functions are required. Existing historical orders keep their old identifiers.
