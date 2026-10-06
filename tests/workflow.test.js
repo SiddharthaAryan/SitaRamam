@@ -63,10 +63,10 @@ test('the printed menu remains browsable before activation and cannot create unv
   const {api,document,writes}=app();
   api.state.menuReady=false;api.state.menu=PRINTED_MENU;api.state.cart={tea:1};api.customer();
   assert.equal(document.querySelectorAll('.item').length,12);
-  assert.equal(document.querySelector('#place').disabled,true);
+  assert.equal(document.querySelector('#place').disabled,false);
   assert.match(document.querySelector('.preview-note').textContent,/Digital orders open soon/);
-  api.review();await api.place('Test',[{id:'tea',name:'Tea',price:20,qty:1}],20);
-  assert.equal(writes.length,0);assert.equal(api.state.screen,'menu');
+  document.querySelector('#customer-name').value='Test';api.review();assert.equal(document.querySelector('#confirm').disabled,true);await api.place('Test',[{id:'tea',name:'Tea',price:20,qty:1}],20);
+  assert.equal(writes.length,0);assert.equal(api.state.screen,'review');
 });
 
 test('customer navigation has no staff link and quantity controls expand after adding',()=>{
@@ -75,4 +75,11 @@ test('customer navigation has no staff link and quantity controls expand after a
  const add=document.querySelector('.add-cart');assert.match(add.textContent,/Add to basket/);add.click();
  assert.equal(document.querySelector('.stepper b').textContent,'1');
  assert.match(document.querySelector('.selected-label').textContent,/1 in your basket/);
+});
+
+test('review edits quantities and totals without losing the basket or customer name',()=>{
+ const {api,document}=app();api.state.cart={tea:2};api.customer();document.querySelector('#customer-name').value='Siddhartha';document.querySelector('#place').click();
+ assert.equal(api.state.screen,'review');assert.match(document.querySelector('.total').textContent,/₹40/);
+ document.querySelector('[data-review="tea"][data-delta="1"]').click();assert.match(document.querySelector('.total').textContent,/₹60/);
+ document.querySelector('#back').click();assert.equal(api.state.cart.tea,3);assert.match(document.querySelector('.section-head').textContent,/Welcome Siddhartha/);
 });
