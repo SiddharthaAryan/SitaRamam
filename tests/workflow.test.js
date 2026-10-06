@@ -92,3 +92,8 @@ test('menu has dietary labels, category headings and unambiguous basket action',
  assert.equal(document.querySelectorAll('.diet-label.nonveg').length,3);
  assert.equal(document.querySelectorAll('.diet-label.egg').length,2);
 });
+
+
+test('counter exposes payment and printing only; chefs expose a single served action',()=>{
+ const {api,document}=app();const date={seconds:1791226800,toDate:()=>new Date('2026-10-05T19:00Z')};api.state.date='2026-10-06';api.state.orders=[{id:'ABC234',orderNumber:12,customerName:'Aryan',total:20,items:[{name:'Tea',qty:1,price:20}],status:'new',createdAt:date}];api.state.role='owner';api.renderStaff();assert.equal(document.querySelectorAll('[data-status]').length,0);assert.equal(document.querySelector('[data-pay]').textContent,'Mark paid');assert.match(document.querySelector('[data-print]').textContent,/Print slip/);api.state.payments.set('ABC234',{});api.renderStaff();assert.equal(document.querySelectorAll('[data-pay]').length,0);api.state.role='kitchen';api.renderStaff();assert.equal(document.querySelectorAll('[data-status]').length,1);assert.equal(document.querySelector('[data-status]').dataset.status,'given');assert.equal(document.querySelectorAll('[data-pay]').length,0);
+});
