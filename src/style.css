@@ -45,3 +45,6 @@ body{--scroll-hue:12;background:radial-gradient(ellipse at 5% 15%,hsl(var(--scro
 
 /* Prominent payment instruction on the confirmation and bill. */
 .payment-proof-alert{font-size:20px!important;font-weight:800!important;line-height:1.5;color:var(--maroon,#7b233e)!important;background:rgba(123,35,62,.08);border:2px solid rgba(123,35,62,.25);border-radius:16px;padding:18px!important}.payment-proof-alert p,.payment-proof-alert strong{font-size:inherit;font-weight:800;color:inherit}
+
+/* Keep controls stable and comfortably tappable in every state. */
+.item-controls{min-height:78px}.item-controls .stepper{height:56px;box-sizing:border-box;grid-template-columns:48px minmax(20px,1fr) 48px}.item-controls .stepper button,.review-quantity button{min-width:48px;min-height:48px;width:48px;height:48px}.category-tabs button{min-height:48px}.item-controls .add-cart{height:56px}.selected-label{line-height:18px}
