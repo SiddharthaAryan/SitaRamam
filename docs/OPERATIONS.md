@@ -42,3 +42,8 @@ The load script always uses loopback addresses and a demo project. Its default i
 
 ## Data retention
 Retain the original order and payment documents for accounting. Do not silently delete older records just to reduce reads: the scoped queries already avoid loading them. Any future archival/deletion policy must preserve item-level exports, payment dates and audit evidence, and be agreed before deletion.
+
+## Live Firebase setup, 15 October 2026
+Both aggregation indexes (orders: createdAt + total; payments: paidAt + amount) were created through Firebase Console and visibly reached Enabled. The orders.items single-field exemption was also saved with ascending, descending and arrays disabled. Billing remained Spark.
+
+The cloud browser can access Firebase Console but displays Site Unavailable for both shell.cloud.google.com and console.cloud.google.com. Hosting is therefore still not deployed. `scripts/deploy-cloud-shell.sh` is a prepared, syntax-checked deployment script for the owner's own Google Cloud Shell. It does not alter billing, database rules or production order records. It runs tests and builds with the Firebase-root path before deploying only Hosting.
