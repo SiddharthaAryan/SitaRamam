@@ -15,6 +15,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&am
 const siteBase = import.meta.env.BASE_URL;
 const homeUrl = siteBase;
 const staffUrl = `${siteBase}staff`;
+const chefView = () => new URLSearchParams(location.search).get('station') === 'kitchen';
 const route = () => location.pathname.replace(/\/$/, '') === staffUrl.replace(/\/$/, '') ? 'staff' : 'customer';
 const errorText = e => ({'permission-denied':'Ordering setup needs the latest database rules. Please use the counter for now.','unauthenticated':'Please sign in again.','unavailable':'Connection lost. Check your internet and retry.','resource-exhausted':'Service limit reached. Please order at the counter.','auth/invalid-credential':'Incorrect password for this station.'}[e.code] || e.message || 'Something went wrong.');
 const motionObserver=typeof IntersectionObserver==='undefined'?null:new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('revealed');motionObserver.unobserve(entry.target);}}),{threshold:.15});
@@ -139,12 +140,12 @@ async function staff() {
     // Limit displayed results in the UI; database indexes and access can be refined with actual traffic.
     state.orders=snap.docs.map(x=>({id:x.id,...x.data()})).sort((a,b)=>(a.createdAt?.seconds||0)-(b.createdAt?.seconds||0));renderStaff();
   },e=>{renderStaff();notice(errorText(e),'error');}); state.unsubscribe.push(unsub);
-  if(state.role==='owner') state.unsubscribe.push(onSnapshot(collection(db,'payments'),snap=>{state.payments=new Map(snap.docs.map(x=>[x.id,x.data()]));renderStaff();},e=>notice(errorText(e),'error')));
-  if(state.role==='owner') state.unsubscribe.push(onSnapshot(collection(db,'menu'),snap=>{state.menu=snap.docs.map(x=>({id:x.id,...x.data()})).sort(menuOrder);renderStaff();if(!snap.docs.length&&!state.menuSeedAttempted){state.menuSeedAttempted=true;seedPrintedMenu().then(()=>notice('Menu saved. Student checkout also requires the latest numbering rules.')).catch(e=>notice(errorText(e),'error'));}}));
+  if(state.role==='owner'&&!chefView()) state.unsubscribe.push(onSnapshot(collection(db,'payments'),snap=>{state.payments=new Map(snap.docs.map(x=>[x.id,x.data()]));renderStaff();},e=>notice(errorText(e),'error')));
+  if(state.role==='owner'&&!chefView()) state.unsubscribe.push(onSnapshot(collection(db,'menu'),snap=>{state.menu=snap.docs.map(x=>({id:x.id,...x.data()})).sort(menuOrder);renderStaff();if(!snap.docs.length&&!state.menuSeedAttempted){state.menuSeedAttempted=true;seedPrintedMenu().then(()=>notice('Menu saved. Student checkout also requires the latest numbering rules.')).catch(e=>notice(errorText(e),'error'));}}));
   renderStaff();
 }
 function renderStaff() {
-  const owner=state.role==='owner', orders=state.orders;
+  const owner=state.role==='owner'&&!chefView(), orders=state.orders;
   const active=orders.filter(x=>x.status!=='given'), unpaid=orders.filter(x=>!state.payments.has(x.id));
   const period=state.reportPeriod==='month'?'month':'day';
   const report=accounts(orders,state.payments,state.date,period);
@@ -164,12 +165,12 @@ function renderStaff() {
   target.querySelectorAll('[data-print]').forEach(b=>b.onclick=()=>printOrder(b.dataset.print));
 }
 function waitingText(order){const end=order.givenAt?.seconds?order.givenAt.seconds*1000:Date.now(),start=order.createdAt?.seconds?order.createdAt.seconds*1000:order.createdAt?.toDate?.().getTime();if(!start)return 'Waiting time pending';const minutes=Math.max(0,Math.floor((end-start)/60000));return `${order.givenAt?'Waited':'Waiting'} ${minutes} min`;}
-function refreshWaitTimers(){if(state.role!=='kitchen')return;root.querySelectorAll('[data-wait]').forEach(el=>{const order=state.orders.find(x=>x.id===el.dataset.wait);if(order)el.textContent=waitingText(order);});}
+function refreshWaitTimers(){if(state.role!=='kitchen'&&!chefView())return;root.querySelectorAll('[data-wait]').forEach(el=>{const order=state.orders.find(x=>x.id===el.dataset.wait);if(order)el.textContent=waitingText(order);});}
 setInterval(refreshWaitTimers,15000);
 function orderCard(order,owner){const paid=state.payments.has(order.id),served=order.status==='given',elapsed=order.givenAt&&order.createdAt?Math.max(0,Math.round((order.givenAt.seconds-order.createdAt.seconds)/60)):null;
 if(!owner)return `<article class="order-card chef-log"><div class="order-heading"><div><div class="eyebrow">ORDER NUMBER</div><h2>${esc(order.orderNumber??order.id)}</h2><span class="customer-label">${esc(order.customerName)}</span></div></div><p>Placed at <b>${time(order.createdAt)}</b> · ${day(order.createdAt)}</p><div class="order-lines">${(order.items||[]).map(x=>`<div><b>${x.qty} ×</b> ${esc(x.name)}</div>`).join('')}</div><p class="chef-wait" data-wait="${esc(order.id)}">${waitingText(order)}</p></article>`;
 return `<article class="order-card ${served?'served':''}"><div class="order-heading"><div><div class="eyebrow">ORDER NUMBER · ${time(order.createdAt)}</div><h2>${esc(order.orderNumber??order.id)}</h2><span class="customer-label">${esc(order.customerName)}</span></div>${owner?`<span class="badge ${paid?'paid':'unpaid'}">${paid?'PAID':'UNPAID'}</span>`:''}</div><div class="order-lines">${(order.items||[]).map(x=>`<div><b>${x.qty} ×</b> ${esc(x.name)} <span>${money(x.price*x.qty)}</span></div>`).join('')}</div><div class="order-total">Total <b>${money(order.total)}</b></div><p class="meal-status ${served?'complete':''}">${served?'✓ Meal served':'Meal not served yet'}${elapsed!==null?`<small>Served in ${elapsed} min · ${time(order.givenAt)}</small>`:''}</p><div class="order-actions"><button class="secondary" data-print="${order.id}">${icon('print',20)} Print slip</button>${owner?(paid?'<span class="payment-recorded">✓ Payment recorded</span>':`<button class="pay-button" data-id="${order.id}" data-pay="paid">Mark paid</button>`):(!served?`<button class="pay-button" data-id="${order.id}" data-status="given">✓ Meal served</button>`:'')}</div>${owner&&!paid?`<details class="payment-options"><summary>Payment method</summary><select data-method aria-label="Payment method for order ${order.id}"><option value="upi">UPI</option><option value="cash">Cash</option></select></details>`:''}</article>`;}
-async function changePayment(id,action,method){if(state.role!=='owner')return;try{if(action==='paid'){const order=state.orders.find(x=>x.id===id);if(!order)return;await setDoc(doc(db,'payments',id),{orderId:id,amount:order.total,method:method==='cash'?'cash':'upi',paidAt:serverTimestamp(),recordedBy:state.user.uid});}else if(confirm(`Undo payment for #${id}?`)){await deleteDoc(doc(db,'payments',id));}}catch(e){notice(errorText(e),'error');}}
+async function changePayment(id,action,method){if(state.role!=='owner'||chefView())return;try{if(action==='paid'){const order=state.orders.find(x=>x.id===id);if(!order)return;await setDoc(doc(db,'payments',id),{orderId:id,amount:order.total,method:method==='cash'?'cash':'upi',paidAt:serverTimestamp(),recordedBy:state.user.uid});}else if(confirm(`Undo payment for #${id}?`)){await deleteDoc(doc(db,'payments',id));}}catch(e){notice(errorText(e),'error');}}
 function exportCsv(orders) {
   const columns=['Order number','Name','Placed (IST)','Items','Order total INR','Food status','Given (IST)','Minutes to give','Payment status','Paid (IST)','Payment method'];
   const fmt=t=>t?.toDate?t.toDate().toLocaleString('en-IN',{timeZone:'Asia/Kolkata'}):'';

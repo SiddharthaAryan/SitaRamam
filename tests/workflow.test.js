@@ -9,8 +9,8 @@ import {accounts,day,csv} from '../src/accounts.js';
 import {icon,category,foodArt} from '../src/visuals.js';
 import {PRINTED_MENU,menuOrder} from '../src/menu.js';
 
-function app() {
-  const dom=new JSDOM('<div id="app"></div>',{url:'https://example.test/'});
+function app(url='https://example.test/') {
+  const dom=new JSDOM('<div id="app"></div>',{url});
   const writes=[];dom.window.scrollTo=()=>{};
   const context=vm.createContext({setInterval:()=>0,document:dom.window.document,window:dom.window,sessionStorage:dom.window.sessionStorage,location:dom.window.location,crypto:webcrypto,QRCode,accounts,day,csv,icon,category,foodArt,PRINTED_MENU,menuOrder,URL,Blob,Intl,console,setTimeout,auth:{},db:{},doc:(_db,collection,id)=>({collection,id}),serverTimestamp:()=>({sentinel:true}),setDoc:async(ref,data)=>writes.push({ref,data}),runTransaction:async(_db,fn)=>fn({get:async()=>({exists:()=>false}),set:(ref,data)=>writes.push({ref,data})})});
   const source=readFileSync(new URL('../src/main.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/import\.meta\.env\.BASE_URL/g,"'/'").replace(/import\.meta\.env\.[A-Z_]+/g,"''").replace(/\nstart\(\);\s*$/,'');
@@ -97,3 +97,5 @@ test('menu has dietary labels, category headings and unambiguous basket action',
 test('counter exposes payment and printing only; chefs have a read-only order log',()=>{
  const {api,document}=app();const date={seconds:1791226800,toDate:()=>new Date('2026-10-05T19:00Z')};api.state.date='2026-10-06';api.state.orders=[{id:'ABC234',orderNumber:12,customerName:'Aryan',total:20,items:[{name:'Tea',qty:1,price:20}],status:'new',createdAt:date}];api.state.role='owner';api.renderStaff();assert.equal(document.querySelectorAll('[data-status]').length,0);assert.equal(document.querySelector('[data-pay]').textContent,'Mark paid');assert.match(document.querySelector('[data-print]').textContent,/Print slip/);api.state.payments.set('ABC234',{});api.renderStaff();assert.equal(document.querySelectorAll('[data-pay]').length,0);api.state.role='kitchen';api.renderStaff();assert.equal(document.querySelectorAll('[data-status]').length,0);assert.equal(document.querySelectorAll('[data-print]').length,0);assert.match(document.querySelector('.chef-log').textContent,/Placed at/);assert.match(document.querySelector('[data-wait]').textContent,/Waiting/);assert.equal(document.querySelectorAll('[data-pay]').length,0);
 });
+
+test('chef link stays read-only even with an existing owner login',()=>{const {api,document}=app('https://example.test/staff?station=kitchen');api.state.role='owner';api.state.orders=[{id:'ABC234',orderNumber:1,customerName:'Test',items:[],total:20,status:'new',createdAt:{seconds:1791226800,toDate:()=>new Date('2026-10-05T19:00Z')}}];api.renderStaff();assert.equal(document.querySelectorAll('[data-pay]').length,0);assert.equal(document.querySelectorAll('[data-status]').length,0);assert.equal(document.querySelector('#menu-tab'),null);assert.equal(document.querySelector('.staff-reports'),null);assert.match(document.querySelector('.chef-log').textContent,/Waiting/);});
