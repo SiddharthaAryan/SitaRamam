@@ -12,7 +12,7 @@ import {PRINTED_MENU,menuOrder} from '../src/menu.js';
 function app(url='https://example.test/') {
   const dom=new JSDOM('<div id="app"></div>',{url});
   const writes=[];dom.window.scrollTo=()=>{};
-  const context=vm.createContext({setInterval:()=>0,document:dom.window.document,window:dom.window,sessionStorage:dom.window.sessionStorage,location:dom.window.location,crypto:webcrypto,QRCode,accounts,day,csv,icon,category,foodArt,PRINTED_MENU,menuOrder,URL,Blob,Intl,console,setTimeout,auth:{},db:{},doc:(_db,collection,id)=>({collection,id}),serverTimestamp:()=>({sentinel:true}),setDoc:async(ref,data)=>writes.push({ref,data}),runTransaction:async(_db,fn)=>fn({get:async()=>({exists:()=>false}),set:(ref,data)=>writes.push({ref,data})})});
+  const context=vm.createContext({setInterval:()=>0,document:dom.window.document,window:dom.window,sessionStorage:dom.window.sessionStorage,location:dom.window.location,crypto:webcrypto,QRCode,accounts,day,csv,icon,category,foodArt,PRINTED_MENU,menuOrder,URL,URLSearchParams,Blob,Intl,console,setTimeout,auth:{},db:{},doc:(_db,collection,id)=>({collection,id}),serverTimestamp:()=>({sentinel:true}),setDoc:async(ref,data)=>writes.push({ref,data}),runTransaction:async(_db,fn)=>fn({get:async()=>({exists:()=>false}),set:(ref,data)=>writes.push({ref,data})})});
   const source=readFileSync(new URL('../src/main.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/import\.meta\.env\.BASE_URL/g,"'/'").replace(/import\.meta\.env\.[A-Z_]+/g,"''").replace(/\nstart\(\);\s*$/,'');
   vm.runInContext(source+'\nglobalThis.api={state,customer,review,place,confirmation,renderStaff,orderCard};',context);
   context.api.state.menuReady=true;
