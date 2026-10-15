@@ -1,0 +1,16 @@
+// Emulator-only capacity check. Never connects to a production project.
+import assert from 'node:assert/strict';
+import {retryCounterWrite} from '../src/counter-retry.js';
+import {initializeApp,deleteApp} from 'firebase/app';
+import {getAuth,connectAuthEmulator,signInAnonymously} from 'firebase/auth';
+import {getFirestore,connectFirestoreEmulator,doc,runTransaction,serverTimestamp} from 'firebase/firestore';
+import {serviceDay} from '../src/accounts.js';
+const project='demo-nightmess',base=`http://127.0.0.1:8088/v1/projects/${project}/databases/(default)/documents`;
+const total=Number(process.env.TEST_ORDERS||1000),workers=Number(process.env.TEST_CONCURRENCY||10);
+if(!Number.isInteger(total)||total<1||total>5000||!Number.isInteger(workers)||workers<1||workers>30)throw Error('Invalid test size');
+const seed=await fetch(base+'/menu/tea',{method:'PATCH',headers:{Authorization:'Bearer owner','Content-Type':'application/json'},body:JSON.stringify({fields:{name:{stringValue:'Tea'},price:{integerValue:'20'},description:{stringValue:''},available:{booleanValue:true}}})});if(!seed.ok)throw Error(await seed.text());
+let next=0;const numbers=[],durations=[],failures=[],apps=[];const started=Date.now();
+await Promise.all(Array.from({length:workers},async(_,i)=>{const app=initializeApp({apiKey:'fake-api-key',projectId:project,authDomain:project+'.firebaseapp.com'},'load-'+i);apps.push(app);const auth=getAuth(app);connectAuthEmulator(auth,'http://127.0.0.1:9098',{disableWarnings:true});const {user}=await signInAnonymously(auth);const db=getFirestore(app);connectFirestoreEmulator(db,'127.0.0.1',8088);
+while(next<total){let code=next++;const id=Array.from({length:6},()=>{const c=String.fromCharCode(65+code%26);code=Math.floor(code/26);return c;}).join(''),start=Date.now();let attemptedNumber=0;try{const number=await retryCounterWrite(()=>runTransaction(db,async tx=>{const ref=doc(db,'orders',id),existing=await tx.get(ref);if(existing.exists())return existing.data().orderNumber;const date=serviceDay(),counter=doc(db,'dailyCounters',date),previous=await tx.get(counter),number=(previous.exists()?previous.data().lastNumber:0)+1;attemptedNumber=number;tx.set(counter,{lastNumber:number,lastOrderId:id,updatedAt:serverTimestamp()});tx.set(ref,{customerUid:user.uid,customerName:'Emulator test',items:[{id:'tea',name:'Tea',price:20,qty:1}],total:20,status:'new',createdAt:serverTimestamp(),orderDay:date,orderNumber:number});return number;},{maxAttempts:10}),async()=>{const current=await runTransaction(db,tx=>tx.get(doc(db,'dailyCounters',serviceDay())));return attemptedNumber>0&&current.exists()&&current.data().lastNumber>=attemptedNumber&&current.data().lastOrderId!==id;});numbers.push(number);durations.push(Date.now()-start);}catch(e){failures.push({code:e.code,message:e.message});}}
+}));
+await Promise.all(apps.map(deleteApp));durations.sort((a,b)=>a-b);console.log(JSON.stringify({environment:'local Firebase emulators, not production',attempted:total,concurrency:workers,succeeded:numbers.length,failed:failures.length,uniqueNumbers:new Set(numbers).size,elapsedSeconds:(Date.now()-started)/1000,p95ms:durations[Math.floor(durations.length*.95)],failures:failures.slice(0,3)},null,2));assert.equal(failures.length,0);assert.equal(new Set(numbers).size,total);

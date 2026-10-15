@@ -1,0 +1,41 @@
+name: Publish to Firebase Hosting
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: firebase-hosting
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: 'AIzaSyA6iItMvz02WAa88LbkecUCBvNbvv8f5Dw'
+          VITE_FIREBASE_AUTH_DOMAIN: night-mess-90b05.firebaseapp.com
+          VITE_FIREBASE_PROJECT_ID: night-mess-90b05
+          VITE_FIREBASE_APP_ID: '1:428703603964:web:67229634b7257aa9760b79'
+          VITE_OWNER_LOGIN_EMAIL: aryansiddhartha03@gmail.com
+          VITE_KITCHEN_LOGIN_EMAIL: aryansiddhartha03+nightmesskitchen@gmail.com
+          DEPLOY_TARGET: firebase
+      - name: Publish reporting indexes
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_NIGHT_MESS }}
+        run: |
+          node --input-type=module -e 'import fs from "node:fs"; if(!process.env.FIREBASE_SERVICE_ACCOUNT)throw Error("Firebase deployment credential is not configured"); fs.writeFileSync(process.env.RUNNER_TEMP+"/firebase-deploy.json",process.env.FIREBASE_SERVICE_ACCOUNT,{mode:0o600});'
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-deploy.json" npx firebase-tools@14.0.0 deploy --only firestore:indexes --project night-mess-90b05 --non-interactive
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_NIGHT_MESS }}
+          channelId: live
+          projectId: night-mess-90b05
+
