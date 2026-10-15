@@ -55,4 +55,4 @@ body{--scroll-hue:12;background:radial-gradient(ellipse at 5% 15%,hsl(var(--scro
 
 .counter-search{display:block;font-size:20px;font-weight:700;margin:24px 0}.counter-search input{font-size:20px;min-height:56px;margin-top:10px;width:100%;box-sizing:border-box}
 
-.chef-log>p{font-size:18px;line-height:1.5}.chef-log .chef-wait{font-size:26px;font-weight:800;color:#79243d;background:#f7edf1;border-radius:14px;padding:16px}
+.chef-log>p{font-size:18px;line-height:1.5}.chef-log .chef-order-time{display:grid;gap:6px;color:#79243d;background:#f7edf1;border-radius:14px;padding:16px}.chef-order-time span{font-size:14px;font-weight:800;letter-spacing:.08em}.chef-order-time strong{font-size:30px;line-height:1.2}.chef-order-time small{font-size:16px}
